@@ -1,0 +1,44 @@
+Module(
+   body=[
+      FunctionDef(
+         name='fib',
+         args=arguments(
+            posonlyargs=[],
+            args=[
+               arg(arg='x')],
+            kwonlyargs=[],
+            kw_defaults=[],
+            defaults=[]),
+         body=[
+            If(
+               test=Compare(
+                  left=Name(id='x', ctx=Load()),
+                  ops=[
+                     Lt()],
+                  comparators=[
+                     Constant(value=2)]),
+               body=[
+                  Return(
+                     value=Constant(value=1))],
+               orelse=[]),
+            Return(
+               value=BinOp(
+                  left=Call(
+                     func=Name(id='fib', ctx=Load()),
+                     args=[
+                        BinOp(
+                           left=Name(id='x', ctx=Load()),
+                           op=Sub(),
+                           right=Constant(value=1))],
+                     keywords=[]),
+                  op=Add(),
+                  right=Call(
+                     func=Name(id='fib', ctx=Load()),
+                     args=[
+                        BinOp(
+                           left=Name(id='x', ctx=Load()),
+                           op=Sub(),
+                           right=Constant(value=2))],
+                     keywords=[])))],
+         decorator_list=[])],
+   type_ignores=[])
