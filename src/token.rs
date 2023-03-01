@@ -1,7 +1,8 @@
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     Def,
     If,
+    Else,
     Return,
     Identifier,
     Int,
@@ -10,6 +11,7 @@ pub enum TokenType {
     Mul,
     Div,
     Colon,
+    Comma,
     LessThan,
     // GreaterThan,
     Indent,
@@ -22,7 +24,7 @@ pub enum TokenType {
     EndMarker,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub value: String,

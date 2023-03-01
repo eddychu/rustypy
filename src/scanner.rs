@@ -18,14 +18,20 @@ impl Scanner {
         }
     }
 
+    pub fn scan_tokens(&mut self) -> Vec<Token> {
+        let mut tokens = Vec::new();
+        loop {
+            let token = self.next_token();
+            tokens.push(token.unwrap());
+            if tokens.last().unwrap().token_type == TokenType::EndMarker {
+                break;
+            }
+        }
+        tokens
+    }
+
     pub fn next_token(&mut self) -> Option<Token> {
         let spaces = self.skip_whitespace();
-        if self.pos >= self.source.len() {
-            return Some(Token {
-                token_type: TokenType::EndMarker,
-                value: "".to_string(),
-            });
-        }
         if self.new_line {
             self.current_indent = spaces;
         }
@@ -44,7 +50,6 @@ impl Scanner {
                 value: "".to_string(),
             });
         }
-
         if let Some(c) = self.peek_char() {
             self.new_line = false;
             match c {
@@ -149,8 +154,16 @@ impl Scanner {
                         value,
                     });
                 }
+                // handle end of file
+                '\0' => {
+                    return Some(Token {
+                        token_type: TokenType::EndMarker,
+                        value: "".to_string(),
+                    });
+                }
 
                 _ => {
+                    println!("Unexpected character: {}", c);
                     todo!()
                 }
             }
