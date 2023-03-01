@@ -111,64 +111,64 @@ impl PrettyPrint for Stmt {
     }
 }
 
-// impl std::fmt::Display for Expr {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Expr::IntLiteral(value) => write!(f, "{}", value),
-//             Expr::Identifier(token) => write!(f, "{}", token.value),
-//             Expr::BinaryOp(left, right, op) => write!(f, "({} {} {})", left, op.value, right),
-//             Expr::Call(callee, args) => {
-//                 write!(f, "{}(", callee)?;
-//                 for (i, arg) in args.iter().enumerate() {
-//                     write!(f, "{}", arg)?;
-//                     if i < args.len() - 1 {
-//                         write!(f, ", ")?;
-//                     }
-//                 }
-//                 write!(f, ")")?;
-//                 Ok(())
-//             }
-//             Expr::Assign(name, value) => write!(f, "{} = {}", name, value),
-//         }
-//     }
-// }
+impl std::fmt::Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expr::IntLiteral(value) => write!(f, "{}", value),
+            Expr::Identifier(token) => write!(f, "{}", token.value),
+            Expr::BinaryOp(left, right, op) => write!(f, "({} {} {})", left, op.value, right),
+            Expr::Call(callee, args) => {
+                write!(f, "{}(", callee)?;
+                for (i, arg) in args.iter().enumerate() {
+                    write!(f, "{}", arg)?;
+                    if i < args.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, ")")?;
+                Ok(())
+            }
+            Expr::Assign(name, value) => write!(f, "{} = {}", name, value),
+        }
+    }
+}
 
-// // implement display for Stmt
-// impl std::fmt::Display for Stmt {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Stmt::Def(name, params, body) => {
-//                 write!(f, "def {}(", name)?;
-//                 for (i, param) in params.iter().enumerate() {
-//                     write!(f, "{}", param)?;
-//                     if i < params.len() - 1 {
-//                         write!(f, ", ")?;
-//                     }
-//                 }
-//                 write!(f, "):\n")?;
-//                 write!(f, "\t{}", body)
-//             }
-//             Stmt::If(condition, body, else_body) => {
-//                 write!(f, "if {}:\n", condition)?;
-//                 write!(f, "{}", body)?;
-//                 if let Some(else_body) = else_body {
-//                     write!(f, "else {}", else_body)?;
-//                 }
-//                 Ok(())
-//             }
-//             Stmt::Return(expr) => write!(f, "return {}", expr),
-//             Stmt::Expr(expr) => write!(f, "{}", expr),
-//             Stmt::Block(stmts) => {
-//                 // add tab indent
-//                 for stmt in stmts {
-//                     write!(f, "{}\n", stmt)?;
-//                 }
-//                 Ok(())
-//             }
-//             Stmt::Invalid => write!(f, "Invalid"),
-//         }
-//     }
-// }
+// implement display for Stmt
+impl std::fmt::Display for Stmt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Stmt::Def(name, params, body) => {
+                write!(f, "def {}(", name)?;
+                for (i, param) in params.iter().enumerate() {
+                    write!(f, "{}", param)?;
+                    if i < params.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, "):\n")?;
+                write!(f, "\t{}", body)
+            }
+            Stmt::If(condition, body, else_body) => {
+                write!(f, "if {}:\n", condition)?;
+                write!(f, "{}", body)?;
+                if let Some(else_body) = else_body {
+                    write!(f, "else {}", else_body)?;
+                }
+                Ok(())
+            }
+            Stmt::Return(expr) => write!(f, "return {}", expr),
+            Stmt::Expr(expr) => write!(f, "{}", expr),
+            Stmt::Block(stmts) => {
+                // add tab indent
+                for stmt in stmts {
+                    write!(f, "{}\n", stmt)?;
+                }
+                Ok(())
+            }
+            Stmt::Invalid => write!(f, "Invalid"),
+        }
+    }
+}
 
 pub fn parse_stmt(tokens: &mut &[Token]) -> Stmt {
     let token = &tokens[0];
