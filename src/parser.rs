@@ -1,257 +1,409 @@
 use core::panic;
+use std::thread::panicking;
 
 use crate::{
-    scanner::Scanner,
     token::{Token, TokenType},
+    tokenizer::tokenize,
 };
 
-pub trait AstNode {}
-#[derive(Debug)]
+pub trait AstNode: PrettyPrint {}
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     IntLiteral(i32),
     Identifier(Token),
     BinaryOp(Box<Expr>, Box<Expr>, Token),
     Call(Box<Expr>, Vec<Expr>),
+    Assign(Box<Expr>, Box<Expr>),
 }
 
 impl AstNode for Expr {}
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    Def(Expr, Vec<Expr>, Vec<Stmt>),
-    If(Expr, Vec<Stmt>, Vec<Stmt>),
+    Def(Expr, Vec<Expr>, Box<Stmt>),
+    If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Return(Box<Expr>),
     Expr(Box<Expr>),
+    Block(Vec<Stmt>),
     Invalid,
 }
-
 impl AstNode for Stmt {}
 
-pub struct Parser {
-    tokens: Vec<Token>,
-    current: usize,
+pub trait PrettyPrint {
+    fn pretty_print(&self, indent: usize) -> String;
 }
 
-impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, current: 0 }
+impl PrettyPrint for Expr {
+    fn pretty_print(&self, indent: usize) -> String {
+        match self {
+            Expr::IntLiteral(value) => format!("{}", value),
+            Expr::Identifier(token) => format!("{}", token.value),
+            Expr::BinaryOp(left, right, op) => {
+                format!(
+                    "({} {} {})",
+                    left.pretty_print(indent),
+                    op.value,
+                    right.pretty_print(indent)
+                )
+            }
+            Expr::Call(callee, args) => {
+                let mut s = format!("{}(", callee.pretty_print(indent));
+                for (i, arg) in args.iter().enumerate() {
+                    s.push_str(&arg.pretty_print(indent));
+                    if i < args.len() - 1 {
+                        s.push_str(", ");
+                    }
+                }
+                s.push_str(")");
+                s
+            }
+            Expr::Assign(name, value) => format!(
+                "{} = {}",
+                name.pretty_print(indent),
+                value.pretty_print(indent)
+            ),
+        }
     }
+}
 
-    pub fn parse(&mut self) -> Vec<Stmt> {
-        let mut stmts = Vec::new();
+impl PrettyPrint for Stmt {
+    fn pretty_print(&self, indent: usize) -> String {
+        match self {
+            Stmt::Def(name, params, body) => {
+                let mut s = format!("def {}(", name.pretty_print(indent));
+                for (i, param) in params.iter().enumerate() {
+                    s.push_str(&param.pretty_print(indent));
+                    if i < params.len() - 1 {
+                        s.push_str(", ");
+                    }
+                }
+                s.push_str("):\n");
+                s.push_str(&body.pretty_print(indent));
+                s
+            }
+            Stmt::If(condition, then_branch, else_branch) => {
+                let mut s = format!(
+                    "if {} :\n{}",
+                    condition.pretty_print(indent),
+                    then_branch.pretty_print(indent)
+                );
+                if let Some(else_branch) = else_branch {
+                    s.push_str(&format!(" else {}", else_branch.pretty_print(indent)));
+                }
+                s
+            }
+            Stmt::Return(value) => {
+                format!("return {}\n", value.pretty_print(indent))
+            }
+            Stmt::Expr(expr) => format!("{}", expr.pretty_print(indent)),
+            Stmt::Block(stmts) => {
+                let mut s = String::new();
+                for stmt in stmts {
+                    s.push_str(&format!(
+                        "{}{}",
+                        "    ".repeat(indent + 1),
+                        stmt.pretty_print(indent + 1)
+                    ));
+                }
+                s
+            }
+            Stmt::Invalid => String::from("Invalid"),
+        }
+    }
+}
+
+// impl std::fmt::Display for Expr {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Expr::IntLiteral(value) => write!(f, "{}", value),
+//             Expr::Identifier(token) => write!(f, "{}", token.value),
+//             Expr::BinaryOp(left, right, op) => write!(f, "({} {} {})", left, op.value, right),
+//             Expr::Call(callee, args) => {
+//                 write!(f, "{}(", callee)?;
+//                 for (i, arg) in args.iter().enumerate() {
+//                     write!(f, "{}", arg)?;
+//                     if i < args.len() - 1 {
+//                         write!(f, ", ")?;
+//                     }
+//                 }
+//                 write!(f, ")")?;
+//                 Ok(())
+//             }
+//             Expr::Assign(name, value) => write!(f, "{} = {}", name, value),
+//         }
+//     }
+// }
+
+// // implement display for Stmt
+// impl std::fmt::Display for Stmt {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Stmt::Def(name, params, body) => {
+//                 write!(f, "def {}(", name)?;
+//                 for (i, param) in params.iter().enumerate() {
+//                     write!(f, "{}", param)?;
+//                     if i < params.len() - 1 {
+//                         write!(f, ", ")?;
+//                     }
+//                 }
+//                 write!(f, "):\n")?;
+//                 write!(f, "\t{}", body)
+//             }
+//             Stmt::If(condition, body, else_body) => {
+//                 write!(f, "if {}:\n", condition)?;
+//                 write!(f, "{}", body)?;
+//                 if let Some(else_body) = else_body {
+//                     write!(f, "else {}", else_body)?;
+//                 }
+//                 Ok(())
+//             }
+//             Stmt::Return(expr) => write!(f, "return {}", expr),
+//             Stmt::Expr(expr) => write!(f, "{}", expr),
+//             Stmt::Block(stmts) => {
+//                 // add tab indent
+//                 for stmt in stmts {
+//                     write!(f, "{}\n", stmt)?;
+//                 }
+//                 Ok(())
+//             }
+//             Stmt::Invalid => write!(f, "Invalid"),
+//         }
+//     }
+// }
+
+pub fn parse_stmt(tokens: &mut &[Token]) -> Stmt {
+    let token = &tokens[0];
+    match token.token_type {
+        TokenType::Def => parse_def(tokens),
+        TokenType::If => parse_if(tokens),
+        TokenType::Return => parse_return(tokens),
+        _ => parse_expr_stmt(tokens),
+    }
+}
+
+pub fn skip_newline(tokens: &mut &[Token]) {
+    let token = &tokens[0];
+    if token.token_type == TokenType::NewLine {
+        *tokens = &tokens[1..];
+    }
+}
+
+pub fn parse_def(tokens: &mut &[Token]) -> Stmt {
+    *tokens = &tokens[1..];
+    let name = parse_identifier(tokens);
+    let mut params = Vec::new();
+    let mut token = &tokens[0];
+    if token.token_type == TokenType::LParen {
+        *tokens = &tokens[1..];
+        token = &tokens[0];
+        while token.token_type != TokenType::RParen {
+            let param = parse_expr(tokens);
+            params.push(param);
+            token = &tokens[0];
+            if token.token_type == TokenType::Comma {
+                *tokens = &tokens[1..];
+            }
+        }
+        *tokens = &tokens[1..];
+    }
+    *tokens = &tokens[1..];
+    skip_newline(tokens);
+
+    let body = parse_block(tokens);
+
+    Stmt::Def(name, params, Box::new(body))
+}
+
+pub fn parse_if(tokens: &mut &[Token]) -> Stmt {
+    *tokens = &tokens[1..];
+    let condition = parse_expr(tokens);
+    *tokens = &tokens[1..];
+    skip_newline(tokens);
+    let body = parse_block(tokens);
+    Stmt::If(condition, Box::new(body), None)
+}
+
+pub fn parse_identifier(tokens: &mut &[Token]) -> Expr {
+    let token = &tokens[0];
+
+    if token.token_type != TokenType::Identifier {
+        panic!("expecting identifier");
+    }
+    *tokens = &tokens[1..];
+    Expr::Identifier(token.clone())
+}
+
+pub fn parse_block(tokens: &mut &[Token]) -> Stmt {
+    // remove indent
+    *tokens = &tokens[1..];
+    let mut token = &tokens[0];
+    let mut stmts = Vec::new();
+    while token.token_type != TokenType::Dedent {
+        let stmt = parse_stmt(tokens);
+        stmts.push(stmt);
+        skip_newline(tokens);
+        token = &tokens[0];
+    }
+    *tokens = &tokens[1..];
+    Stmt::Block(stmts)
+}
+
+pub fn parse_expr_stmt(tokens: &mut &[Token]) -> Stmt {
+    let expr = parse_expr(tokens);
+    // handle new_line
+    *tokens = &tokens[1..];
+    Stmt::Expr(Box::new(expr))
+}
+
+pub fn parse_return(tokens: &mut &[Token]) -> Stmt {
+    *tokens = &tokens[1..];
+    let expr = parse_expr(tokens);
+    Stmt::Return(Box::new(expr))
+}
+
+pub fn parse_expr(tokens: &mut &[Token]) -> Expr {
+    parse_assignment(tokens)
+}
+
+pub fn parse_assignment(tokens: &mut &[Token]) -> Expr {
+    let name = parse_equality(tokens);
+    let token = &tokens[0];
+    if token.token_type == TokenType::Assign {
+        *tokens = &tokens[1..];
+        let value = parse_expr(tokens);
+        Expr::Assign(Box::new(name), Box::new(value))
+    } else {
+        name
+    }
+}
+
+pub fn parse_equality(tokens: &mut &[Token]) -> Expr {
+    let mut expr = parse_comparison(tokens);
+    // loop {
+    //     let token = &tokens[0];
+    //     if token.token_type != TokenType::Equal && token.token_type != TokenType::NotEqual {
+    //         break;
+    //     }
+    //     *tokens = &tokens[1..];
+    //     let right = parse_comparison(tokens);
+    //     expr = Expr::BinaryOp(Box::new(expr), Box::new(right), token);
+    // }
+    expr
+}
+
+pub fn parse_comparison(tokens: &mut &[Token]) -> Expr {
+    let mut expr = parse_term(tokens);
+    loop {
+        let token = &tokens[0];
+        if token.token_type != TokenType::LessThan {
+            break;
+        }
+        *tokens = &tokens[1..];
+        let right = parse_term(tokens);
+        expr = Expr::BinaryOp(Box::new(expr), Box::new(right), token.clone());
+    }
+    expr
+}
+
+pub fn parse_term(tokens: &mut &[Token]) -> Expr {
+    let mut expr = parse_factor(tokens);
+    loop {
+        let token = &tokens[0];
+        if token.token_type != TokenType::Plus && token.token_type != TokenType::Minus {
+            break;
+        }
+        *tokens = &tokens[1..];
+        let right = parse_factor(tokens);
+        expr = Expr::BinaryOp(Box::new(expr), Box::new(right), token.clone());
+    }
+    expr
+}
+
+pub fn parse_factor(tokens: &mut &[Token]) -> Expr {
+    let mut expr = parse_unary(tokens);
+    loop {
+        let token = &tokens[0];
+        if token.token_type != TokenType::Mul && token.token_type != TokenType::Div {
+            break;
+        }
+        *tokens = &tokens[1..];
+        let right = parse_unary(tokens);
+        expr = Expr::BinaryOp(Box::new(expr), Box::new(right), token.clone());
+    }
+    expr
+}
+
+pub fn parse_unary(tokens: &mut &[Token]) -> Expr {
+    let token = &tokens[0];
+    if token.token_type == TokenType::Minus {
+        *tokens = &tokens[1..];
+        let right = parse_unary(tokens);
+        return Expr::BinaryOp(
+            Box::new(Expr::IntLiteral(0)),
+            Box::new(right),
+            token.clone(),
+        );
+    }
+    parse_call(tokens)
+}
+
+pub fn parse_call(tokens: &mut &[Token]) -> Expr {
+    let mut expr = parse_primary(tokens);
+    loop {
+        let token = &tokens[0];
+        if token.token_type != TokenType::LParen {
+            break;
+        }
+        *tokens = &tokens[1..];
+        let mut args = Vec::new();
         loop {
-            if self.peek().token_type == TokenType::EndMarker {
+            let token = &tokens[0];
+            if token.token_type == TokenType::RParen {
                 break;
             }
-            let stmt = self.parse_stmt();
-            stmts.push(stmt);
-        }
-        stmts
-    }
-
-    pub fn parse_stmt(&mut self) -> Stmt {
-        let token = self.peek();
-        if token.token_type == TokenType::Return {
-            return self.parse_return();
-        }
-        if token.token_type == TokenType::Def {
-            return self.parse_def();
-        }
-
-        if token.token_type == TokenType::If {
-            return self.parse_if();
-        }
-        Stmt::Invalid
-    }
-
-    pub fn parse_def(&mut self) -> Stmt {
-        self.consume(TokenType::Def, "Expect 'def' keyword");
-        let name = self.parse_identifier();
-        self.consume(TokenType::LParen, "Expect '('");
-        let mut params = Vec::new();
-        while !self.is_match(vec![TokenType::RParen]) {
-            let param = self.parse_identifier();
-            params.push(Expr::Identifier(param));
-            if self.is_match(vec![TokenType::Comma]) {
-                // self.consume(TokenType::Comma, "Expect ','");
+            let arg = parse_expr(tokens);
+            args.push(arg);
+            let token = &tokens[0];
+            if token.token_type == TokenType::RParen {
+                break;
             }
+            *tokens = &tokens[1..];
         }
-        self.consume(TokenType::Colon, "Expect ':'");
-        let body = self.parse_block();
-        // handle new line and deden
-        Stmt::Def(Expr::Identifier(name), params, body)
+        *tokens = &tokens[1..];
+        expr = Expr::Call(Box::new(expr), args);
     }
+    expr
+}
 
-    pub fn parse_if(&mut self) -> Stmt {
-        self.consume(TokenType::If, "Expect 'if' keyword");
-        let condition = self.parse_expr();
-        self.consume(TokenType::Colon, "Expect ':'");
-
-        let then_branch = self.parse_block();
-        let mut else_branch = Vec::new();
-        if self.is_match(vec![TokenType::Else]) {
-            self.consume(TokenType::Colon, "Expect ':'");
-            else_branch = self.parse_block();
-        }
-        Stmt::If(condition, then_branch, else_branch)
-    }
-
-    pub fn parse_return(&mut self) -> Stmt {
-        self.consume(TokenType::Return, "Expect 'return' keyword");
-        let value = self.parse_expr();
-        Stmt::Return(Box::new(value))
-    }
-
-    pub fn parse_block(&mut self) -> Vec<Stmt> {
-        let mut stmts = Vec::new();
-        self.consume(TokenType::NewLine, "Expect newline");
-        self.consume(TokenType::Indent, "Expect indent");
-        while !self.is_match(vec![TokenType::Dedent]) {
-            let stmt = self.parse_stmt();
-            stmts.push(stmt);
-            if self.is_match(vec![TokenType::NewLine]) {}
-        }
-        // self.consume(TokenType::NewLine, "Expect newline");
-        // self.consume(TokenType::Dedent, "Expect dedent");
-        stmts
-    }
-
-    pub fn parse_identifier(&mut self) -> Token {
-        let token = self.peek();
-        if token.token_type == TokenType::Identifier {
-            self.advance();
-            token
-        } else {
-            panic!("Expect identifier");
-        }
-    }
-
-    pub fn parse_expr(&mut self) -> Expr {
-        self.parse_equality()
-    }
-
-    pub fn parse_equality(&mut self) -> Expr {
-        let expr = self.parse_comparison();
-        // while self.is_match(vec![TokenType::LessThan]) {
-        //     let operator = self.previous();
-        //     let right = self.parse_comparison();
-        //     expr = Expr::BinaryOp(Box::new(expr), Box::new(right), operator.value);
-        // }
-        expr
-    }
-
-    pub fn parse_comparison(&mut self) -> Expr {
-        let mut expr = self.parse_term();
-        while self.is_match(vec![TokenType::LessThan]) {
-            let operator = self.previous();
-            let right = self.parse_term();
-            expr = Expr::BinaryOp(Box::new(expr), Box::new(right), operator);
-        }
-        expr
-    }
-
-    pub fn parse_term(&mut self) -> Expr {
-        let mut expr = self.parse_factor();
-        while self.is_match(vec![TokenType::Plus, TokenType::Minus]) {
-            let operator = self.previous();
-            let right = self.parse_factor();
-            expr = Expr::BinaryOp(Box::new(expr), Box::new(right), operator);
-        }
-        expr
-    }
-
-    pub fn parse_factor(&mut self) -> Expr {
-        let mut expr = self.parse_unary();
-        while self.is_match(vec![TokenType::Mul, TokenType::Div]) {
-            let operator = self.previous();
-            let right = self.parse_unary();
-            expr = Expr::BinaryOp(Box::new(expr), Box::new(right), operator);
-        }
-        expr
-    }
-
-    pub fn parse_unary(&mut self) -> Expr {
-        if self.is_match(vec![TokenType::Minus]) {
-            let operator = self.previous();
-            let right = self.parse_unary();
-            Expr::BinaryOp(Box::new(Expr::IntLiteral(0)), Box::new(right), operator)
-        } else {
-            self.parse_call()
-        }
-    }
-
-    pub fn parse_call(&mut self) -> Expr {
-        let mut expr = self.parse_primary();
-        while self.is_match(vec![TokenType::LParen]) {
-            let mut args = Vec::new();
-            while !self.is_match(vec![TokenType::RParen]) {
-                let arg = self.parse_expr();
-                args.push(arg);
-                if self.is_match(vec![TokenType::Comma]) {
-                    // self.consume(TokenType::Comma, "Expect ','");
-                }
+pub fn parse_primary(tokens: &mut &[Token]) -> Expr {
+    let token = &tokens[0];
+    *tokens = &tokens[1..];
+    match token.token_type {
+        TokenType::Int => Expr::IntLiteral(token.value.parse().unwrap()),
+        TokenType::Identifier => Expr::Identifier(token.clone()),
+        TokenType::LParen => {
+            let expr = parse_expr(tokens);
+            let token = &tokens[0];
+            if token.token_type != TokenType::RParen {
+                panic!("Expected )");
             }
-            expr = Expr::Call(Box::new(expr), args);
-        }
-        expr
-    }
-
-    pub fn parse_primary(&mut self) -> Expr {
-        if self.is_match(vec![TokenType::Int]) {
-            Expr::IntLiteral(self.previous().value.parse().unwrap())
-        } else if self.is_match(vec![TokenType::Identifier]) {
-            Expr::Identifier(self.previous())
-        } else if self.is_match(vec![TokenType::LParen]) {
-            let expr = self.parse_expr();
-            self.consume(TokenType::RParen, "Expect ')' after expression.");
+            *tokens = &tokens[1..];
             expr
-        } else {
-            panic!("Expect expression.");
         }
+        _ => panic!("Unexpected token {:?}", token),
     }
+}
 
-    fn is_match(&mut self, token_types: Vec<TokenType>) -> bool {
-        for token_type in token_types {
-            if self.check(token_type) {
-                self.advance();
-                return true;
-            }
+pub fn parse_program(tokens: &mut &[Token]) -> Vec<Stmt> {
+    let mut stmts = Vec::new();
+    loop {
+        skip_newline(tokens);
+        if tokens[0].token_type == TokenType::EndMarker {
+            break;
         }
-        false
+        let stmt = parse_stmt(tokens);
+        stmts.push(stmt);
     }
-
-    fn check(&mut self, token_type: TokenType) -> bool {
-        if self.is_at_end() {
-            return false;
-        }
-        self.peek().token_type == token_type
-    }
-
-    fn advance(&mut self) -> Token {
-        if !self.is_at_end() {
-            self.current += 1;
-        }
-        self.previous()
-    }
-
-    fn peek(&mut self) -> Token {
-        self.tokens[self.current].clone()
-    }
-
-    fn previous(&mut self) -> Token {
-        self.tokens[self.current - 1].clone()
-    }
-
-    fn is_at_end(&mut self) -> bool {
-        self.peek().token_type == TokenType::EndMarker
-    }
-
-    fn consume(&mut self, token_type: TokenType, message: &str) {
-        if self.check(token_type) {
-            self.advance();
-        } else {
-            panic!("{}", message);
-        }
-    }
+    stmts
 }
 
 #[cfg(test)]
@@ -259,60 +411,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_expr() {
-        // let source = std::fs::read_to_string("tests/fib.py").unwrap();
-        let source = "1 + 2 * 3".to_string();
-
-        let mut scanner = Scanner::new(source);
-        let tokens = scanner.scan_tokens();
-        let mut parser = Parser::new(tokens);
-        let expr = parser.parse_expr();
-        println!("{:?}", expr);
+    fn test_parse_assign() {
+        let source = std::fs::read_to_string("tests/var.py").unwrap();
+        let tokens = tokenize(&source);
+        let mut tokens = &mut &tokens[..];
+        let stmts = parse_program(&mut tokens);
+        for stmt in stmts {
+            stmt.pretty_print(0);
+        }
     }
 
     #[test]
-    fn test_parse() {
+    fn test_parse_def() {
         let source = std::fs::read_to_string("tests/fib.py").unwrap();
-        let mut scanner = Scanner::new(source);
-        let tokens = scanner.scan_tokens();
-        let mut parser = Parser::new(tokens);
-        let stmt = parser.parse();
-        print!("{:?}", stmt)
-    }
-    #[test]
-    fn test_return_stmt() {
-        let source = "return 1 + 2 * 3".to_string();
-        let mut scanner = Scanner::new(source);
-        let tokens = scanner.scan_tokens();
-        let mut parser = Parser::new(tokens);
-        let expr = parser.parse_stmt();
-        println!("{:?}", expr);
-    }
-    #[test]
-    fn test_parse_block() {
-        let source = "\n    return 1\n".to_string();
-        let mut scanner = Scanner::new(source);
-        let tokens = scanner.scan_tokens();
-        let mut parser = Parser::new(tokens);
-        let expr = parser.parse_block();
-        println!("{:?}", expr);
-    }
-    #[test]
-    fn test_def_stmt() {
-        let source = "def fib(n):\n    return 1\n".to_string();
-        let mut scanner = Scanner::new(source);
-        let tokens = scanner.scan_tokens();
-        let mut parser = Parser::new(tokens);
-        let expr = parser.parse_def();
-        println!("{:?}", expr);
-    }
-    #[test]
-    fn test_if_stmt() {
-        let source = "if n < 1:\n    return 1\n".to_string();
-        let mut scanner = Scanner::new(source);
-        let tokens = scanner.scan_tokens();
-        let mut parser = Parser::new(tokens);
-        let expr = parser.parse_if();
-        println!("{:?}", expr);
+        let tokens = tokenize(&source);
+        let mut tokens = &mut &tokens[..];
+        let stmts = parse_program(&mut tokens);
+        for stmt in stmts {
+            println!("{}", stmt.pretty_print(0));
+        }
     }
 }

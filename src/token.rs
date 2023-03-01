@@ -12,6 +12,7 @@ pub enum TokenType {
     Div,
     Colon,
     Comma,
+    Assign,
     LessThan,
     // GreaterThan,
     Indent,
@@ -28,4 +29,10 @@ pub enum TokenType {
 pub struct Token {
     pub token_type: TokenType,
     pub value: String,
+}
+
+impl Token {
+    pub fn new(token_type: TokenType, value: String) -> Self {
+        Self { token_type, value }
+    }
 }

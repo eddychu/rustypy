@@ -1,7 +1,9 @@
+mod environment;
 mod interpreter;
 mod parser;
 mod scanner;
 mod token;
+mod tokenizer;
 use scanner::Scanner;
 fn main() {
     // is '\n' considered a whitespace?

@@ -109,7 +109,13 @@ impl Scanner {
                         value: "<".to_string(),
                     });
                 }
-
+                '=' => {
+                    self.next_char();
+                    return Some(Token {
+                        token_type: TokenType::Assign,
+                        value: "=".to_string(),
+                    });
+                }
                 '\n' => {
                     self.next_char();
                     self.new_line = true;
@@ -203,6 +209,17 @@ impl Scanner {
             }
         }
         count
+    }
+
+    pub fn skip_empty_lines(&mut self) {
+        self.skip_whitespace();
+        while let Some(c) = self.peek_char() {
+            if c == '\n' {
+                self.next_char();
+            } else {
+                break;
+            }
+        }
     }
 
     pub fn take_while<F>(&mut self, f: F) -> String
@@ -363,5 +380,13 @@ mod test {
         let token = scanner.next_token().unwrap();
         assert_eq!(token.token_type, TokenType::EndMarker);
         assert_eq!(token.value, "".to_string());
+    }
+
+    #[test]
+    fn test_scan_return() {
+        let source = std::fs::read_to_string("tests/return.py").unwrap();
+        let mut scanner = Scanner::new(source);
+        let tokens = scanner.scan_tokens();
+        println!("{:?}", tokens);
     }
 }
