@@ -1,5 +1,4 @@
-def fib(x, y):
+def fib(x):
     if x < 2:
-        if y < 3:
-            return x + y
+        return x
     return fib(x-1) + fib(x-2)

@@ -1,10 +1,6 @@
 use core::panic;
-use std::thread::panicking;
 
-use crate::{
-    token::{Token, TokenType},
-    tokenizer::tokenize,
-};
+use crate::token::{Token, TokenType};
 
 pub trait AstNode: PrettyPrint {}
 #[derive(Debug, Clone, PartialEq)]
@@ -24,7 +20,6 @@ pub enum Stmt {
     Return(Box<Expr>),
     Expr(Box<Expr>),
     Block(Vec<Stmt>),
-    Invalid,
 }
 impl AstNode for Stmt {}
 
@@ -106,7 +101,6 @@ impl PrettyPrint for Stmt {
                 }
                 s
             }
-            Stmt::Invalid => String::from("Invalid"),
         }
     }
 }
@@ -165,7 +159,6 @@ impl std::fmt::Display for Stmt {
                 }
                 Ok(())
             }
-            Stmt::Invalid => write!(f, "Invalid"),
         }
     }
 }
@@ -406,24 +399,31 @@ pub fn parse_program(tokens: &mut &[Token]) -> Vec<Stmt> {
     stmts
 }
 
+pub fn parse(tokens: Vec<Token>) -> Vec<Stmt> {
+    let tokens = &mut &tokens[..];
+    parse_program(tokens)
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::tokenizer::{read_lines, tokenize};
+
     use super::*;
 
     #[test]
     fn test_parse_assign() {
-        let source = std::fs::read_to_string("tests/var.py").unwrap();
+        let source = read_lines("tests/var.py");
         let tokens = tokenize(&source);
         let mut tokens = &mut &tokens[..];
         let stmts = parse_program(&mut tokens);
         for stmt in stmts {
-            stmt.pretty_print(0);
+            println!("{}", stmt.pretty_print(0));
         }
     }
 
     #[test]
     fn test_parse_def() {
-        let source = std::fs::read_to_string("tests/fib.py").unwrap();
+        let source = read_lines("tests/fib.py");
         let tokens = tokenize(&source);
         let mut tokens = &mut &tokens[..];
         let stmts = parse_program(&mut tokens);

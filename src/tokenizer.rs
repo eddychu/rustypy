@@ -1,5 +1,5 @@
 use core::panic;
-use std::thread::panicking;
+use std::{io::BufRead, thread::panicking};
 
 use crate::token::{Token, TokenType};
 
@@ -28,11 +28,6 @@ pub fn tokenize_char(input: &mut &str) -> Option<Token> {
     token
 }
 
-pub fn tokenize_name(input: &mut &str) -> Option<Token> {
-    let pattern = r"^[a-zA-Z_][a-zA-Z0-9_]*";
-    return tokenize_pattern(input, pattern);
-}
-
 pub fn skip_whitespace(input: &mut &str) -> usize {
     let pattern = r"^[ \t]+";
     let re = regex::Regex::new(pattern).unwrap();
@@ -44,93 +39,102 @@ pub fn skip_whitespace(input: &mut &str) -> usize {
     0
 }
 
-pub fn tokenize_int(input: &mut &str) -> Option<Token> {
+pub fn match_pattern(input: &mut &str, pattern: &str) -> Option<String> {
+    let re = regex::Regex::new(pattern).unwrap();
+    let value = if let Some(captures) = re.captures(input) {
+        let value = captures.get(0).unwrap().as_str();
+        *input = &input[value.len()..];
+        Some(String::from(value))
+    } else {
+        None
+    };
+    value
+}
+
+fn tokenize_name(input: &mut &str) -> Option<Token> {
+    let pattern = r"^[a-zA-Z_][a-zA-Z0-9_]*";
+    if let Some(value) = match_pattern(input, pattern) {
+        Some(Token::new(TokenType::Identifier, value))
+    } else {
+        None
+    }
+}
+
+fn tokenize_keyword(input: &mut &str) -> Option<Token> {
+    let keywords = vec!["def", "if", "else", "return"];
+    for keyword in keywords {
+        if let Some(value) = match_pattern(input, keyword) {
+            match value.as_str() {
+                "def" => return Some(Token::new(TokenType::Def, value)),
+                "if" => return Some(Token::new(TokenType::If, value)),
+                "else" => return Some(Token::new(TokenType::Else, value)),
+                "return" => return Some(Token::new(TokenType::Return, value)),
+                _ => {}
+            }
+        }
+    }
+    None
+}
+
+fn tokenize_int(input: &mut &str) -> Option<Token> {
     let pattern = r"^[0-9]+";
-    return tokenize_pattern(input, pattern);
-}
 
-pub fn tokenize_pattern(input: &mut &str, pattern: &str) -> Option<Token> {
-    let re = regex::Regex::new(pattern).unwrap();
-    let token = if let Some(captures) = re.captures(input) {
-        let value = captures.get(0).unwrap().as_str();
-        *input = &input[value.len()..];
-
-        if value == "def" {
-            return Some(Token::new(TokenType::Def, String::from(value)));
-        }
-        if value == "if" {
-            return Some(Token::new(TokenType::If, String::from(value)));
-        }
-
-        if value == "else" {
-            return Some(Token::new(TokenType::Else, String::from(value)));
-        }
-
-        if value == "return" {
-            return Some(Token::new(TokenType::Return, String::from(value)));
-        }
-
-        Some(Token::new(TokenType::Identifier, String::from(value)))
+    if let Some(value) = match_pattern(input, pattern) {
+        Some(Token::new(TokenType::Int, value))
     } else {
         None
-    };
-    token
-}
-
-pub fn generate_indent(input: &mut &str) -> Option<Token> {
-    let pattern = r"^[ \t]+";
-    let re = regex::Regex::new(pattern).unwrap();
-    let token = if let Some(captures) = re.captures(input) {
-        let value = captures.get(0).unwrap().as_str();
-        *input = &input[value.len()..];
-        Some(Token::new(TokenType::Indent, String::from(value)))
-    } else {
-        None
-    };
-    token
-}
-
-pub fn tokenize_line(line: &str, indent_level: &mut Vec<usize>) -> Vec<Token> {
-    let mut tokens = Vec::new();
-    let mut input = line;
-    let indent = skip_whitespace(&mut input);
-    if indent > *indent_level.last().unwrap() {
-        tokens.push(Token::new(TokenType::Indent, String::from("")));
-        indent_level.push(indent);
-    } else if indent < *indent_level.last().unwrap() {
-        while indent < *indent_level.last().unwrap() {
-            tokens.push(Token::new(TokenType::Dedent, String::from("")));
-            indent_level.pop();
-        }
     }
-    loop {
-        skip_whitespace(&mut input);
-        if let Some(token) = tokenize_char(&mut input) {
-            tokens.push(token);
-        } else if let Some(token) = tokenize_int(&mut input) {
-            tokens.push(token);
-        } else if let Some(token) = tokenize_name(&mut input) {
-            tokens.push(token);
-        } else {
-            break;
-        }
-    }
-    tokens.push(Token::new(TokenType::NewLine, String::from("\n")));
-    tokens
 }
 
-pub fn tokenize(source: &str) -> Vec<Token> {
-    let lines = source.split('\n').collect::<Vec<&str>>();
-    let mut tokens = Vec::new();
-
+pub fn tokenize(lines: &Vec<String>) -> Vec<Token> {
     let mut indent_level = vec![0];
-
+    let mut tokens = Vec::new();
     for line in lines {
-        let line_tokens = tokenize_line(line, &mut indent_level);
-        tokens.extend(line_tokens);
+        let mut input = &mut &line[..];
+        let indent = skip_whitespace(&mut input);
+        if indent > *indent_level.last().unwrap() {
+            tokens.push(Token::new(TokenType::Indent, String::from("")));
+            indent_level.push(indent);
+        } else if indent < *indent_level.last().unwrap() {
+            while indent < *indent_level.last().unwrap() {
+                tokens.push(Token::new(TokenType::Dedent, String::from("")));
+                indent_level.pop();
+            }
+        }
+        loop {
+            skip_whitespace(&mut input);
+            if let Some(token) = tokenize_keyword(&mut input) {
+                tokens.push(token);
+            } else if let Some(token) = tokenize_name(&mut input) {
+                tokens.push(token);
+            } else if let Some(token) = tokenize_int(&mut input) {
+                tokens.push(token);
+            } else if let Some(token) = tokenize_char(&mut input) {
+                tokens.push(token);
+            } else {
+                break;
+            }
+        }
+        tokens.push(Token::new(TokenType::NewLine, String::from("\n")));
     }
+    while indent_level.len() > 1 {
+        tokens.push(Token::new(TokenType::Dedent, String::from("")));
+        indent_level.pop();
+    }
+
     tokens.push(Token::new(TokenType::EndMarker, String::from("")));
     tokens
+}
+
+pub fn read_lines(filename: &str) -> Vec<String> {
+    // read file and return lines
+    let file = std::fs::File::open(filename).unwrap();
+    let reader = std::io::BufReader::new(file);
+    let mut lines = Vec::new();
+    for line in reader.lines() {
+        lines.push(line.unwrap());
+    }
+    lines
 }
 
 #[cfg(test)]
@@ -140,24 +144,26 @@ mod tests {
 
     #[test]
     fn test_tokenize() {
-        let source = std::fs::read_to_string("tests/fib.py").unwrap();
-        let tokens = tokenize(&source);
+        let lines = read_lines("tests/fib.py");
+
+        let tokens = tokenize(&lines);
         for token in tokens {
             println!("{:?}", token);
         }
     }
     #[test]
     fn test_return() {
-        let source = std::fs::read_to_string("tests/return.py").unwrap();
-        let tokens = tokenize(&source);
+        let lines = read_lines("tests/return.py");
+
+        let tokens = tokenize(&lines);
         for token in tokens {
             println!("{:?}", token);
         }
     }
     #[test]
     fn test_assign() {
-        let source = std::fs::read_to_string("tests/var.py").unwrap();
-        let tokens = tokenize(&source);
+        let lines = read_lines("tests/var.py");
+        let tokens = tokenize(&lines);
         for token in tokens {
             println!("{:?}", token);
         }
