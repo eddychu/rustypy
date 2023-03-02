@@ -174,9 +174,10 @@ pub fn parse_stmt(tokens: &mut &[Token]) -> Stmt {
 }
 
 pub fn skip_newline(tokens: &mut &[Token]) {
-    let token = &tokens[0];
-    if token.token_type == TokenType::NewLine {
+    let mut token = &tokens[0];
+    while token.token_type == TokenType::NewLine {
         *tokens = &tokens[1..];
+        token = &tokens[0];
     }
 }
 
@@ -336,6 +337,7 @@ pub fn parse_unary(tokens: &mut &[Token]) -> Expr {
             token.clone(),
         );
     }
+
     parse_call(tokens)
 }
 
@@ -424,6 +426,27 @@ mod tests {
     #[test]
     fn test_parse_def() {
         let source = read_lines("tests/fib.py");
+        let tokens = tokenize(&source);
+        let mut tokens = &mut &tokens[..];
+        let stmts = parse_program(&mut tokens);
+        for stmt in stmts {
+            println!("{}", stmt.pretty_print(0));
+        }
+    }
+
+    #[test]
+    fn test_parse_ambiguous() {
+        let source = read_lines("tests/ambiguous.py");
+        let tokens = tokenize(&source);
+        let mut tokens = &mut &tokens[..];
+        let stmts = parse_program(&mut tokens);
+        for stmt in stmts {
+            println!("{}", stmt.pretty_print(0));
+        }
+    }
+    #[test]
+    fn test_parse_empty_new_line() {
+        let source = read_lines("tests/def.py");
         let tokens = tokenize(&source);
         let mut tokens = &mut &tokens[..];
         let stmts = parse_program(&mut tokens);

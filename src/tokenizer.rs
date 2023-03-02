@@ -168,4 +168,13 @@ mod tests {
             println!("{:?}", token);
         }
     }
+
+    #[test]
+    fn test_def_with_multiple_empty_lines() {
+        let lines = read_lines("tests/def.py");
+        let tokens = tokenize(&lines);
+        for token in tokens {
+            println!("{:?}", token);
+        }
+    }
 }
