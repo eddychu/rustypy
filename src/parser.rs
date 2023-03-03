@@ -12,14 +12,16 @@ pub enum Expr {
     Assign(Box<Expr>, Box<Expr>),
 }
 
-impl AstNode for Expr {}
+impl AstNode for Expr {} 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Def(Expr, Vec<Expr>, Box<Stmt>),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
-    Return(Box<Expr>),
-    Expr(Box<Expr>),
+    Return(Expr),
+    Expr(Expr),
     Block(Vec<Stmt>),
+    Break,
+    While(Expr, Box<Stmt>),
 }
 impl AstNode for Stmt {}
 
@@ -99,8 +101,15 @@ impl PrettyPrint for Stmt {
                         stmt.pretty_print(indent + 1)
                     ));
                 }
+                s.push('\n');
                 s
             }
+            Stmt::Break => format!("{}break\n\n", "    ".repeat(indent)),
+            Stmt::While(condition, body) => format!(
+                "while {}:\n{}",
+                condition.pretty_print(indent),
+                body.pretty_print(indent)
+            ),
         }
     }
 }
@@ -159,6 +168,11 @@ impl std::fmt::Display for Stmt {
                 }
                 Ok(())
             }
+            Stmt::Break => write!(f, "break\n"),
+            Stmt::While(condition, body) => {
+                write!(f, "while {}:\n", condition)?;
+                write!(f, "{}", body)
+            }
         }
     }
 }
@@ -169,6 +183,8 @@ pub fn parse_stmt(tokens: &mut &[Token]) -> Stmt {
         TokenType::Def => parse_def(tokens),
         TokenType::If => parse_if(tokens),
         TokenType::Return => parse_return(tokens),
+        TokenType::While => parse_while(tokens),
+        TokenType::Break => parse_break(tokens),
         _ => parse_expr_stmt(tokens),
     }
 }
@@ -216,6 +232,20 @@ pub fn parse_if(tokens: &mut &[Token]) -> Stmt {
     Stmt::If(condition, Box::new(body), None)
 }
 
+pub fn parse_while(tokens: &mut &[Token]) -> Stmt {
+    *tokens = &tokens[1..];
+    let condition = parse_expr(tokens);
+    *tokens = &tokens[1..];
+    skip_newline(tokens);
+    let body = parse_block(tokens);
+    Stmt::While(condition, Box::new(body))
+}
+
+pub fn parse_break(tokens: &mut &[Token]) -> Stmt {
+    *tokens = &tokens[1..];
+    Stmt::Break
+}
+
 pub fn parse_identifier(tokens: &mut &[Token]) -> Expr {
     let token = &tokens[0];
 
@@ -245,13 +275,13 @@ pub fn parse_expr_stmt(tokens: &mut &[Token]) -> Stmt {
     let expr = parse_expr(tokens);
     // handle new_line
     *tokens = &tokens[1..];
-    Stmt::Expr(Box::new(expr))
+    Stmt::Expr(expr)
 }
 
 pub fn parse_return(tokens: &mut &[Token]) -> Stmt {
     *tokens = &tokens[1..];
     let expr = parse_expr(tokens);
-    Stmt::Return(Box::new(expr))
+    Stmt::Return(expr)
 }
 
 pub fn parse_expr(tokens: &mut &[Token]) -> Expr {
@@ -272,15 +302,16 @@ pub fn parse_assignment(tokens: &mut &[Token]) -> Expr {
 
 pub fn parse_equality(tokens: &mut &[Token]) -> Expr {
     let mut expr = parse_comparison(tokens);
-    // loop {
-    //     let token = &tokens[0];
-    //     if token.token_type != TokenType::Equal && token.token_type != TokenType::NotEqual {
-    //         break;
-    //     }
-    //     *tokens = &tokens[1..];
-    //     let right = parse_comparison(tokens);
-    //     expr = Expr::BinaryOp(Box::new(expr), Box::new(right), token);
-    // }
+    loop {
+        let token = &tokens[0];
+        if token.token_type != TokenType::EqualEqual && token.token_type != TokenType::BangEqual {
+            break;
+        }
+        *tokens = &tokens[1..];
+        let right = parse_comparison(tokens);
+        expr = Expr::BinaryOp(Box::new(expr), Box::new(right), token.clone());
+    }
+   
     expr
 }
 
@@ -454,4 +485,16 @@ mod tests {
             println!("{}", stmt.pretty_print(0));
         }
     }
+
+    #[test]
+    fn test_parse_while_stmt() {
+        let source = read_lines("tests/while.py");
+        let tokens = tokenize(&source);
+        let mut tokens = &mut &tokens[..];
+        let stmts = parse_program(&mut tokens);
+        for stmt in stmts {
+            println!("{}", stmt.pretty_print(0));
+        }
+    }
+
 }

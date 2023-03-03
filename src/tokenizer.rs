@@ -1,7 +1,7 @@
 use core::panic;
 use std::{io::BufRead, thread::panicking};
 
-use crate::token::{Token, TokenType};
+use crate::token::{Token, TokenType, self};
 
 pub fn tokenize_char(input: &mut &str) -> Option<Token> {
     let token = if let Some(c) = input.chars().next() {
@@ -26,6 +26,27 @@ pub fn tokenize_char(input: &mut &str) -> Option<Token> {
         *input = &input[1..];
     }
     token
+}
+
+pub fn tokenize_operator_multi_char(input: &mut &str) -> Option<Token> {
+    let operator = ["=="];
+    for op in operator {
+        let token = if let Some(value) = match_pattern(input, op) {
+            match value.as_str() {
+                "==" => return Some(Token::new(TokenType::EqualEqual, value)),
+                _ => {
+                    panic!("Unknown operator: {}", value);
+                }
+            }
+        } else {
+            None
+        };
+        if token.is_some() {
+            *input = &input[op.len()..];
+        }
+        return token;
+    }
+    None
 }
 
 pub fn skip_whitespace(input: &mut &str) -> usize {
@@ -61,7 +82,7 @@ fn tokenize_name(input: &mut &str) -> Option<Token> {
 }
 
 fn tokenize_keyword(input: &mut &str) -> Option<Token> {
-    let keywords = vec!["def", "if", "else", "return"];
+    let keywords = vec!["def", "if", "else", "return", "while"];
     for keyword in keywords {
         if let Some(value) = match_pattern(input, keyword) {
             match value.as_str() {
@@ -69,7 +90,11 @@ fn tokenize_keyword(input: &mut &str) -> Option<Token> {
                 "if" => return Some(Token::new(TokenType::If, value)),
                 "else" => return Some(Token::new(TokenType::Else, value)),
                 "return" => return Some(Token::new(TokenType::Return, value)),
-                _ => {}
+                "while" => return Some(Token::new(TokenType::While, value)),
+                "break" => return Some(Token::new(TokenType::Break, value)),
+                _ => {
+                    panic!("Unknown keyword: {}", value);
+                }
             }
         }
     }
@@ -108,6 +133,8 @@ pub fn tokenize(lines: &Vec<String>) -> Vec<Token> {
             } else if let Some(token) = tokenize_name(&mut input) {
                 tokens.push(token);
             } else if let Some(token) = tokenize_int(&mut input) {
+                tokens.push(token);
+            } else if let Some(token) = tokenize_operator_multi_char(input) {
                 tokens.push(token);
             } else if let Some(token) = tokenize_char(&mut input) {
                 tokens.push(token);
@@ -172,6 +199,15 @@ mod tests {
     #[test]
     fn test_def_with_multiple_empty_lines() {
         let lines = read_lines("tests/def.py");
+        let tokens = tokenize(&lines);
+        for token in tokens {
+            println!("{:?}", token);
+        }
+    }
+
+    #[test]
+    fn test_while() {
+        let lines = read_lines("tests/while.py");
         let tokens = tokenize(&lines);
         for token in tokens {
             println!("{:?}", token);

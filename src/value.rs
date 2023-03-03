@@ -6,6 +6,9 @@ use crate::{environment::Environment, parser::Stmt};
 pub enum Value {
     Int(i32),
     Bool(bool),
+
+    // used for break
+    Interrupted,
     Null,
     Function(Function),
 }

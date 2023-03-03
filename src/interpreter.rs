@@ -1,4 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     environment::Environment,
@@ -20,6 +19,7 @@ fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Val
                     TokenType::Mul => Value::Int(left * right),
                     TokenType::Div => Value::Int(left / right),
                     TokenType::LessThan => Value::Bool(left < right),
+                    TokenType::EqualEqual => Value::Bool(left == right),
                     _ => panic!("Unknown operator"),
                 },
                 _ => panic!("Invalid operands"),
@@ -110,6 +110,28 @@ fn interpret_stmt(stmt: &Stmt, env: &mut Environment, frame_index: usize) -> Val
                 _ => panic!("Invalid condition"),
             }
         }
+        Stmt::While(condition, body) => {
+            let mut value = Value::Null;
+            loop {
+                let condition = interpret_expr(condition, env, frame_index);
+                match condition {
+                    Value::Bool(true) => {
+                        value = interpret_stmt(body, env, frame_index);
+
+                        if value != Value::Null  || value == Value::Interrupted{
+                            break;
+                        }
+                    }
+                    Value::Bool(false) => break,
+                    _ => panic!("Invalid condition"),
+                }
+            }
+            if value == Value::Interrupted{
+                Value::Null
+            } else {
+                value
+            }
+        }
         _ => {
             println!("{:?}", stmt);
             panic!("Unknown statement")
@@ -155,6 +177,18 @@ mod tests {
     fn test_fib() {
         let mut env = Environment::new();
         let source = read_lines("tests/fib.py");
+        let tokens = tokenize(&source);
+        let stmt = parse(tokens);
+        for stmt in stmt {
+            println!("{:?}", interpret_stmt(&stmt, &mut env, 0));
+            println!("{}", env);
+        }
+    }
+
+    #[test]
+    fn test_if() {
+        let mut env = Environment::new();
+        let source = read_lines("tests/while.py");
         let tokens = tokenize(&source);
         let stmt = parse(tokens);
         for stmt in stmt {
