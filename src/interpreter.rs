@@ -7,6 +7,7 @@ use crate::{
 };
 
 fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Value {
+    println!("expr: {:?}", expr);
     match expr {
         Expr::IntLiteral(value) => Value::Int(*value),
         Expr::BinaryOp(left, right, op) => {
@@ -26,6 +27,7 @@ fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Val
             }
         }
         Expr::Assign(name, value) => {
+
             let value = interpret_expr(value, env, frame_index);
             match name.as_ref() {
                 Expr::Identifier(token) => {
@@ -60,6 +62,7 @@ fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Val
 }
 
 fn interpret_stmt(stmt: &Stmt, env: &mut Environment, frame_index: usize) -> Value {
+    println!("stmt: {:?}", stmt);
     match stmt {
         Stmt::Expr(expr) => {
             let value = interpret_expr(expr, env, frame_index);
@@ -101,37 +104,46 @@ fn interpret_stmt(stmt: &Stmt, env: &mut Environment, frame_index: usize) -> Val
         }
         Stmt::If(condition, then_branch, else_branch) => {
             let condition = interpret_expr(condition, env, frame_index);
-            match condition {
-                Value::Bool(true) => interpret_stmt(then_branch, env, frame_index),
+            let value = match condition {
+                Value::Bool(true) => {
+                    interpret_stmt(then_branch, env, frame_index)},
                 Value::Bool(false) => match else_branch {
                     Some(else_branch) => interpret_stmt(else_branch, env, frame_index),
                     None => Value::Null,
                 },
                 _ => panic!("Invalid condition"),
-            }
+            };
+            value
         }
         Stmt::While(condition, body) => {
             let mut value = Value::Null;
+            
+
             loop {
                 let condition = interpret_expr(condition, env, frame_index);
                 match condition {
                     Value::Bool(true) => {
                         value = interpret_stmt(body, env, frame_index);
 
-                        if value != Value::Null  || value == Value::Interrupted{
+                        if value != Value::Null {
                             break;
                         }
                     }
-                    Value::Bool(false) => break,
+                    Value::Bool(false) => {
+                        value = Value::Interrupted;
+                        break;
+                    }
                     _ => panic!("Invalid condition"),
                 }
             }
-            if value == Value::Interrupted{
-                Value::Null
-            } else {
-                value
-            }
+            value
         }
+        Stmt::Print(expr) => {
+            let value = interpret_expr(expr, env, frame_index);
+            println!("{:?}", value);
+            Value::Null
+        }
+        Stmt::Break => Value::Interrupted,
         _ => {
             println!("{:?}", stmt);
             panic!("Unknown statement")
@@ -186,12 +198,25 @@ mod tests {
     }
 
     #[test]
-    fn test_if() {
+    fn test_while() {
         let mut env = Environment::new();
         let source = read_lines("tests/while.py");
         let tokens = tokenize(&source);
         let stmt = parse(tokens);
         for stmt in stmt {
+            println!("{:?}", interpret_stmt(&stmt, &mut env, 0));
+            println!("{}", env);
+        }
+    }
+
+    #[test]
+    fn test_reassign() {
+        let mut env = Environment::new();
+        let source = read_lines("tests/reassign.py");
+        let tokens = tokenize(&source);
+        let stmt = parse(tokens);
+        for stmt in stmt {
+
             println!("{:?}", interpret_stmt(&stmt, &mut env, 0));
             println!("{}", env);
         }

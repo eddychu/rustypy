@@ -82,7 +82,7 @@ fn tokenize_name(input: &mut &str) -> Option<Token> {
 }
 
 fn tokenize_keyword(input: &mut &str) -> Option<Token> {
-    let keywords = vec!["def", "if", "else", "return", "while"];
+    let keywords = vec!["def", "if", "else", "return", "while", "break", "print"];
     for keyword in keywords {
         if let Some(value) = match_pattern(input, keyword) {
             match value.as_str() {
@@ -92,6 +92,7 @@ fn tokenize_keyword(input: &mut &str) -> Option<Token> {
                 "return" => return Some(Token::new(TokenType::Return, value)),
                 "while" => return Some(Token::new(TokenType::While, value)),
                 "break" => return Some(Token::new(TokenType::Break, value)),
+                "print" => return Some(Token::new(TokenType::Print, value)),
                 _ => {
                     panic!("Unknown keyword: {}", value);
                 }
@@ -208,6 +209,15 @@ mod tests {
     #[test]
     fn test_while() {
         let lines = read_lines("tests/while.py");
+        let tokens = tokenize(&lines);
+        for token in tokens {
+            println!("{:?}", token);
+        }
+    }
+
+    #[test]
+    fn test_print() {
+        let lines = read_lines("tests/print.py");
         let tokens = tokenize(&lines);
         for token in tokens {
             println!("{:?}", token);

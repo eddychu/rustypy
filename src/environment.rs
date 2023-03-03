@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, borrow::Borrow};
 
 use crate::value::Value;
 
@@ -60,10 +60,23 @@ impl Environment {
     }
 
     pub fn set(&mut self, name: &str, value: Value, frame_index: usize) {
-        let current_frame = frame_index;
-        let frame = &mut self.envs[current_frame];
-        frame.variables.insert(name.to_string(), value);
+        let mut current_frame = frame_index;
+        loop {
+            let frame = &mut self.envs[current_frame];
+            if frame.variables.contains_key(name) {
+                frame.variables.insert(name.to_string(), value);
+                return;
+            }
+            if let Some(parent) = frame.parent {
+                current_frame = parent;
+            } else {
+                break;
+            }
+        }
+        self.envs[frame_index].variables.insert(name.to_string(), value);
     }
+
+   
 }
 
 #[derive(Debug, Clone)]
@@ -81,18 +94,3 @@ impl Frame {
         }
     }
 }
-
-// impl Environment {
-//     pub fn new() -> Self {
-//         Self {
-//             variables: HashMap::new(),
-//         }
-//     }
-//     pub fn get(&self, name: &str) -> Option<Value> {
-//         self.variables.get(name).cloned()
-//     }
-
-//     pub fn set(&mut self, name: &str, value: Value) {
-//         self.variables.insert(name.to_string(), value);
-//     }
-// }

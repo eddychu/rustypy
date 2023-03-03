@@ -18,6 +18,7 @@ pub enum Stmt {
     Def(Expr, Vec<Expr>, Box<Stmt>),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Return(Expr),
+    Print(Expr),
     Expr(Expr),
     Block(Vec<Stmt>),
     Break,
@@ -110,6 +111,7 @@ impl PrettyPrint for Stmt {
                 condition.pretty_print(indent),
                 body.pretty_print(indent)
             ),
+            Stmt::Print(value) => format!("{}print {}\n","    ".repeat(indent), value.pretty_print(indent)),
         }
     }
 }
@@ -173,6 +175,7 @@ impl std::fmt::Display for Stmt {
                 write!(f, "while {}:\n", condition)?;
                 write!(f, "{}", body)
             }
+            Stmt::Print(value) => write!(f, "print {}\n", value),
         }
     }
 }
@@ -185,6 +188,7 @@ pub fn parse_stmt(tokens: &mut &[Token]) -> Stmt {
         TokenType::Return => parse_return(tokens),
         TokenType::While => parse_while(tokens),
         TokenType::Break => parse_break(tokens),
+        TokenType::Print => parse_print(tokens),
         _ => parse_expr_stmt(tokens),
     }
 }
@@ -282,6 +286,12 @@ pub fn parse_return(tokens: &mut &[Token]) -> Stmt {
     *tokens = &tokens[1..];
     let expr = parse_expr(tokens);
     Stmt::Return(expr)
+}
+
+pub fn parse_print(tokens: &mut &[Token]) -> Stmt {
+    *tokens = &tokens[1..];
+    let expr = parse_expr(tokens);
+    Stmt::Print(expr)
 }
 
 pub fn parse_expr(tokens: &mut &[Token]) -> Expr {
@@ -423,6 +433,7 @@ pub fn parse_program(tokens: &mut &[Token]) -> Vec<Stmt> {
     let mut stmts = Vec::new();
     loop {
         skip_newline(tokens);
+        // println!("looping {:?}", tokens[0]);
         if tokens[0].token_type == TokenType::EndMarker {
             break;
         }
@@ -489,6 +500,18 @@ mod tests {
     #[test]
     fn test_parse_while_stmt() {
         let source = read_lines("tests/while.py");
+        let tokens = tokenize(&source);
+        let mut tokens = &mut &tokens[..];
+        let stmts = parse_program(&mut tokens);
+        for stmt in stmts {
+            // println!("{}", stmt.pretty_print(0));
+            println!("{:?}", stmt);
+        }
+    }
+
+    #[test]
+    fn test_parse_print_stmt() {
+        let source = read_lines("tests/print.py");
         let tokens = tokenize(&source);
         let mut tokens = &mut &tokens[..];
         let stmts = parse_program(&mut tokens);
