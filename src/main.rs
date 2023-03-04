@@ -6,5 +6,5 @@ mod tokenizer;
 mod value;
 
 fn main() {
-    // is '\n' considered a whitespace?
+
 }

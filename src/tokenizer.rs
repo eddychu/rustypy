@@ -82,7 +82,7 @@ fn tokenize_name(input: &mut &str) -> Option<Token> {
 }
 
 fn tokenize_keyword(input: &mut &str) -> Option<Token> {
-    let keywords = vec!["def", "if", "else", "return", "while", "break", "print"];
+    let keywords = vec!["def", "if", "else", "return", "while", "break"];
     for keyword in keywords {
         if let Some(value) = match_pattern(input, keyword) {
             match value.as_str() {
@@ -92,11 +92,20 @@ fn tokenize_keyword(input: &mut &str) -> Option<Token> {
                 "return" => return Some(Token::new(TokenType::Return, value)),
                 "while" => return Some(Token::new(TokenType::While, value)),
                 "break" => return Some(Token::new(TokenType::Break, value)),
-                "print" => return Some(Token::new(TokenType::Print, value)),
                 _ => {
                     panic!("Unknown keyword: {}", value);
                 }
             }
+        }
+    }
+    None
+}
+
+fn tokenize_builtin(input: &mut &str) -> Option<Token> {
+    let builtins = vec!["print"];
+    for builtin in builtins {
+        if let Some(value) = match_pattern(input, builtin) {
+            return Some(Token::new(TokenType::Builtin, value));
         }
     }
     None
@@ -131,9 +140,14 @@ pub fn tokenize(lines: &Vec<String>) -> Vec<Token> {
             skip_whitespace(&mut input);
             if let Some(token) = tokenize_keyword(&mut input) {
                 tokens.push(token);
-            } else if let Some(token) = tokenize_name(&mut input) {
+            } 
+            else if let Some(token) = tokenize_builtin(&mut input) {
                 tokens.push(token);
-            } else if let Some(token) = tokenize_int(&mut input) {
+            }
+            else if let Some(token) = tokenize_name(&mut input) {
+                tokens.push(token);
+            } 
+            else if let Some(token) = tokenize_int(&mut input) {
                 tokens.push(token);
             } else if let Some(token) = tokenize_operator_multi_char(input) {
                 tokens.push(token);
@@ -219,8 +233,9 @@ mod tests {
     fn test_print() {
         let lines = read_lines("tests/print.py");
         let tokens = tokenize(&lines);
-        for token in tokens {
-            println!("{:?}", token);
-        }
+        assert!(tokens.len() > 0);
+        assert_eq!(tokens[0].token_type, TokenType::Builtin);
     }
+
+
 }

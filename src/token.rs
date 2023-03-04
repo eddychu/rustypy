@@ -6,7 +6,7 @@ pub enum TokenType {
     While,
     Return,
     Break,
-    Print,
+    Builtin,
     Identifier,
     Int,
     Plus,

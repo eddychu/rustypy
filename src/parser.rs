@@ -7,6 +7,7 @@ pub trait AstNode: PrettyPrint {}
 pub enum Expr {
     IntLiteral(i32),
     Identifier(Token),
+    Builtin(Token),
     BinaryOp(Box<Expr>, Box<Expr>, Token),
     Call(Box<Expr>, Vec<Expr>),
     Assign(Box<Expr>, Box<Expr>),
@@ -18,7 +19,6 @@ pub enum Stmt {
     Def(Expr, Vec<Expr>, Box<Stmt>),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Return(Expr),
-    Print(Expr),
     Expr(Expr),
     Block(Vec<Stmt>),
     Break,
@@ -59,6 +59,7 @@ impl PrettyPrint for Expr {
                 name.pretty_print(indent),
                 value.pretty_print(indent)
             ),
+            Expr::Builtin(token) => format!("{}", token.value),
         }
     }
 }
@@ -111,7 +112,6 @@ impl PrettyPrint for Stmt {
                 condition.pretty_print(indent),
                 body.pretty_print(indent)
             ),
-            Stmt::Print(value) => format!("{}print {}\n","    ".repeat(indent), value.pretty_print(indent)),
         }
     }
 }
@@ -134,6 +134,7 @@ impl std::fmt::Display for Expr {
                 Ok(())
             }
             Expr::Assign(name, value) => write!(f, "{} = {}", name, value),
+            Expr::Builtin(token) => write!(f, "{}", token.value),
         }
     }
 }
@@ -175,7 +176,6 @@ impl std::fmt::Display for Stmt {
                 write!(f, "while {}:\n", condition)?;
                 write!(f, "{}", body)
             }
-            Stmt::Print(value) => write!(f, "print {}\n", value),
         }
     }
 }
@@ -188,7 +188,6 @@ pub fn parse_stmt(tokens: &mut &[Token]) -> Stmt {
         TokenType::Return => parse_return(tokens),
         TokenType::While => parse_while(tokens),
         TokenType::Break => parse_break(tokens),
-        TokenType::Print => parse_print(tokens),
         _ => parse_expr_stmt(tokens),
     }
 }
@@ -203,7 +202,7 @@ pub fn skip_newline(tokens: &mut &[Token]) {
 
 pub fn parse_def(tokens: &mut &[Token]) -> Stmt {
     *tokens = &tokens[1..];
-    let name = parse_identifier(tokens);
+    let name = parse_identifier_or_builtin(tokens);
     let mut params = Vec::new();
     let mut token = &tokens[0];
     if token.token_type == TokenType::LParen {
@@ -250,14 +249,20 @@ pub fn parse_break(tokens: &mut &[Token]) -> Stmt {
     Stmt::Break
 }
 
-pub fn parse_identifier(tokens: &mut &[Token]) -> Expr {
+pub fn parse_identifier_or_builtin(tokens: &mut &[Token]) -> Expr {
     let token = &tokens[0];
 
-    if token.token_type != TokenType::Identifier {
-        panic!("expecting identifier");
+    match token.token_type {
+        TokenType::Identifier => {
+            *tokens = &tokens[1..];
+            Expr::Identifier(token.clone())
+        }
+        TokenType::Builtin => {
+            *tokens = &tokens[1..];
+            Expr::Builtin(token.clone())
+        }
+        _ => panic!("expecting identifier"),
     }
-    *tokens = &tokens[1..];
-    Expr::Identifier(token.clone())
 }
 
 pub fn parse_block(tokens: &mut &[Token]) -> Stmt {
@@ -288,11 +293,11 @@ pub fn parse_return(tokens: &mut &[Token]) -> Stmt {
     Stmt::Return(expr)
 }
 
-pub fn parse_print(tokens: &mut &[Token]) -> Stmt {
-    *tokens = &tokens[1..];
-    let expr = parse_expr(tokens);
-    Stmt::Print(expr)
-}
+// pub fn parse_print(tokens: &mut &[Token]) -> Stmt {
+//     *tokens = &tokens[1..];
+//     let expr = parse_expr(tokens);
+//     Stmt::Print(expr)
+// }
 
 pub fn parse_expr(tokens: &mut &[Token]) -> Expr {
     parse_assignment(tokens)
@@ -416,6 +421,7 @@ pub fn parse_primary(tokens: &mut &[Token]) -> Expr {
     match token.token_type {
         TokenType::Int => Expr::IntLiteral(token.value.parse().unwrap()),
         TokenType::Identifier => Expr::Identifier(token.clone()),
+        TokenType::Builtin => Expr::Builtin(token.clone()),
         TokenType::LParen => {
             let expr = parse_expr(tokens);
             let token = &tokens[0];
@@ -516,6 +522,7 @@ mod tests {
         let mut tokens = &mut &tokens[..];
         let stmts = parse_program(&mut tokens);
         for stmt in stmts {
+            println!("{:?}", stmt);
             println!("{}", stmt.pretty_print(0));
         }
     }

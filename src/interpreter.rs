@@ -3,7 +3,7 @@ use crate::{
     environment::Environment,
     parser::{Expr, Stmt},
     token::TokenType,
-    value::{Function, Value},
+    value::{Function, Value, builtin_print},
 };
 
 fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Value {
@@ -38,24 +38,55 @@ fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Val
             Value::Null
         }
         Expr::Call(name, args) => {
-            let func = match name.as_ref() {
-                Expr::Identifier(token) => match env.get(&token.value, frame_index) {
-                    Some(Value::Function(func)) => func.clone(),
+            match name.as_ref() {
+                Expr::Identifier(token) => {
+                    match env.get(&token.value, frame_index) {
+                    Some(Value::Function(func)) =>  {
+                        let new_index = env.allocate_new_frame();
+                        env.envs[new_index].parent = Some(frame_index);
+                        for (i, arg) in args.iter().enumerate() {
+                            let value = interpret_expr(arg, env, new_index);
+                            env.set(&func.args[i], value, new_index);
+                        }
+                        interpret_stmt(&func.body, env, new_index)
+                    }
                     _ => panic!("Invalid function"),
-                },
-                _ => panic!("Invalid function"),
-            };
-            let new_index = env.allocate_new_frame();
-            env.envs[new_index].parent = Some(frame_index);
-            for (i, arg) in args.iter().enumerate() {
-                let value = interpret_expr(arg, env, new_index);
-                env.set(&func.args[i], value, new_index);
+                    }
+                 }
+                Expr::Builtin(token) => {
+                    match token.value.as_ref() {
+                        "print" => {
+                            let mut values = Vec::new();
+                            for arg in args {
+                                let value = interpret_expr(arg, env, frame_index);
+                                values.push(value);
+                            }
+                            builtin_print(values)
+                        }
+                        _ => panic!("Unknown builtin"),
+                    }
+                }
+                _ => panic!("Invalid function")
             }
-            interpret_stmt(&func.body, env, new_index)
+
+            // let func = match name.as_ref() {
+            //     Expr::Identifier(token) => match env.get(&token.value, frame_index) {
+            //         Some(Value::Function(func)) => func.clone(),
+            //         _ => panic!("Invalid function"),
+            //     },
+            //     _ => panic!("Invalid function"),
+            // };
+            
         }
         Expr::Identifier(token) => match env.get(&token.value, frame_index) {
             Some(value) => value.clone(),
             None => panic!("Undefined variable"),
+        },
+
+        Expr::Builtin(token) => match token.token_type {
+            // hard coded builtin functions
+            TokenType::Builtin => Value::Builtin(token.value.clone()),
+            _ => panic!("Unknown builtin"),
         },
         _ => panic!("Unknown expression"),
     }
@@ -117,8 +148,6 @@ fn interpret_stmt(stmt: &Stmt, env: &mut Environment, frame_index: usize) -> Val
         }
         Stmt::While(condition, body) => {
             let mut value = Value::Null;
-            
-
             loop {
                 let condition = interpret_expr(condition, env, frame_index);
                 match condition {
@@ -137,11 +166,6 @@ fn interpret_stmt(stmt: &Stmt, env: &mut Environment, frame_index: usize) -> Val
                 }
             }
             value
-        }
-        Stmt::Print(expr) => {
-            let value = interpret_expr(expr, env, frame_index);
-            println!("{:?}", value);
-            Value::Null
         }
         Stmt::Break => Value::Interrupted,
         _ => {
@@ -219,6 +243,17 @@ mod tests {
 
             println!("{:?}", interpret_stmt(&stmt, &mut env, 0));
             println!("{}", env);
+        }
+    }
+
+    #[test]
+    fn test_print() {
+        let mut env = Environment::new();
+        let source = read_lines("tests/print.py");
+        let tokens = tokenize(&source);
+        let stmt = parse(tokens);
+        for stmt in stmt {
+            interpret_stmt(&stmt, &mut env, 0);
         }
     }
 }
