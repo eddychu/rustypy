@@ -1,9 +1,8 @@
-
 use crate::{
     environment::Environment,
     parser::{Expr, Stmt},
     token::TokenType,
-    value::{Function, Value, builtin_print},
+    value::{builtin_print, Function, Value},
 };
 
 fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Value {
@@ -27,7 +26,6 @@ fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Val
             }
         }
         Expr::Assign(name, value) => {
-
             let value = interpret_expr(value, env, frame_index);
             match name.as_ref() {
                 Expr::Identifier(token) => {
@@ -39,9 +37,8 @@ fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Val
         }
         Expr::Call(name, args) => {
             match name.as_ref() {
-                Expr::Identifier(token) => {
-                    match env.get(&token.value, frame_index) {
-                    Some(Value::Function(func)) =>  {
+                Expr::Identifier(token) => match env.get(&token.value, frame_index) {
+                    Some(Value::Function(func)) => {
                         let new_index = env.allocate_new_frame();
                         env.envs[new_index].parent = Some(frame_index);
                         for (i, arg) in args.iter().enumerate() {
@@ -51,22 +48,19 @@ fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Val
                         interpret_stmt(&func.body, env, new_index)
                     }
                     _ => panic!("Invalid function"),
-                    }
-                 }
-                Expr::Builtin(token) => {
-                    match token.value.as_ref() {
-                        "print" => {
-                            let mut values = Vec::new();
-                            for arg in args {
-                                let value = interpret_expr(arg, env, frame_index);
-                                values.push(value);
-                            }
-                            builtin_print(values)
+                },
+                Expr::Builtin(token) => match token.value.as_ref() {
+                    "print" => {
+                        let mut values = Vec::new();
+                        for arg in args {
+                            let value = interpret_expr(arg, env, frame_index);
+                            values.push(value);
                         }
-                        _ => panic!("Unknown builtin"),
+                        builtin_print(values)
                     }
-                }
-                _ => panic!("Invalid function")
+                    _ => panic!("Unknown builtin"),
+                },
+                _ => panic!("Invalid function"),
             }
 
             // let func = match name.as_ref() {
@@ -76,7 +70,6 @@ fn interpret_expr(expr: &Expr, env: &mut Environment, frame_index: usize) -> Val
             //     },
             //     _ => panic!("Invalid function"),
             // };
-            
         }
         Expr::Identifier(token) => match env.get(&token.value, frame_index) {
             Some(value) => value.clone(),
@@ -136,8 +129,7 @@ fn interpret_stmt(stmt: &Stmt, env: &mut Environment, frame_index: usize) -> Val
         Stmt::If(condition, then_branch, else_branch) => {
             let condition = interpret_expr(condition, env, frame_index);
             let value = match condition {
-                Value::Bool(true) => {
-                    interpret_stmt(then_branch, env, frame_index)},
+                Value::Bool(true) => interpret_stmt(then_branch, env, frame_index),
                 Value::Bool(false) => match else_branch {
                     Some(else_branch) => interpret_stmt(else_branch, env, frame_index),
                     None => Value::Null,
@@ -240,7 +232,6 @@ mod tests {
         let tokens = tokenize(&source);
         let stmt = parse(tokens);
         for stmt in stmt {
-
             println!("{:?}", interpret_stmt(&stmt, &mut env, 0));
             println!("{}", env);
         }
