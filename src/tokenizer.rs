@@ -136,11 +136,71 @@ static KEYWORDS : phf::Map<&'static str, TokenType> = phf_map!(
     "yield" => TokenType::Yield,
 );
 
+static OPERATORS  : phf::Map<&'static str, TokenType> = phf_map!(
+    "+" => TokenType::Plus,
+    "-" => TokenType::Minus,
+    "*" => TokenType::Star,
+    "/" => TokenType::Slash,
+    "|" => TokenType::Vbar,
+    "&" => TokenType::Amper,
+    "<" => TokenType::Less,
+    ">" => TokenType::Greater,
+    "=" => TokenType::Equal,
+    "." => TokenType::Dot,
+    "%" => TokenType::Percent,
+    "{" => TokenType::Lbrace,
+    "}" => TokenType::Rbrace,
+    "~" => TokenType::Tilde,
+    "^" => TokenType::Circumflex,
+    "@" => TokenType::At,
+    "," => TokenType::Comma,
+    ":" => TokenType::Colon,
+    ";" => TokenType::Semi,
+    "(" => TokenType::Lpar,
+    ")" => TokenType::Rpar,
+    "[" => TokenType::Lsqb,
+    "]" => TokenType::Rsqb,
+    "**" => TokenType::DoubleStar,
+    "//" => TokenType::DoubleSlash,
+    "<<" => TokenType::LeftShift,
+    ">>" => TokenType::RightShift,
+    "+=" => TokenType::PlusEqual,
+    "-=" => TokenType::MinusEqual,
+    "*=" => TokenType::StarEqual,
+    "/=" => TokenType::SlashEqual,
+    "%=" => TokenType::PercentEqual,
+    "&=" => TokenType::AmperEqual,
+    "|=" => TokenType::VbarEqual,
+    "^=" => TokenType::CircumflexEqual,
+    "<<=" => TokenType::LeftShiftEqual,
+    ">>=" => TokenType::RightShiftEqual,
+    "**=" => TokenType::DoubleStarEqual,
+    "//=" => TokenType::DoubleSlashEqual,
+    "->" => TokenType::Rarrow,
+    "==" => TokenType::EqEqual,
+    "!=" => TokenType::NotEqual,
+    "<=" => TokenType::LessEqual,
+    ">=" => TokenType::GreaterEqual,
+    ":=" => TokenType::ColonEqual,
+    "..." => TokenType::Ellipsis,
+    "@=" => TokenType::AtEqual,
+);
+
+
+#[derive(Clone, PartialEq)]
 pub struct SourceRef<'source> {
     pub source: &'source str,
     pub line: usize,
     pub start: usize,
     pub end: usize,
+}
+
+// implemtn debug
+
+impl std::fmt::Debug for SourceRef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SourceRef").field("value", &self.value()).finish()
+    }
 }
 
 impl<'source> SourceRef<'source> {
@@ -158,7 +218,7 @@ impl<'source> SourceRef<'source> {
     }
 }
 
-
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token<'source> {
     pub token_type: TokenType,
     pub source_ref: SourceRef<'source>
@@ -223,11 +283,20 @@ impl <'source> Tokenizer<'source> {
             return Token::endmarker(self.current, self.line, self.source);
         }
         let ch = self.source[self.current..].chars().next().unwrap();
+        self.start = self.current;
         match ch {
             ' ' | '\r' | '\t' => {
                self.advance();
                self.next()
             }
+            '\n' => {
+                let token = Token::new(TokenType::Newline, self.start, self.current, self.line, self.source);
+                self.line += 1;
+                self.start = 0;
+                self.advance();
+                return token;
+            }
+
             // is character
             'a'..='z' | 'A'..='Z' | '_' => {
                 return self.get_identifier();
@@ -237,6 +306,11 @@ impl <'source> Tokenizer<'source> {
             '0'..='9' => {
                 return self.get_number();
             }
+
+            '|' | '&' | '/' | '+' | '-' | '*' |'<' | '>' | '=' | '.' | '%' | '{' | '}' | '~' | '^' | '@' | ',' | ':' | ';' | '(' | ')' | '[' | ']' => {
+                return self.get_operator();
+            }
+
             _ => {
                 panic!("next error")
             }
@@ -271,19 +345,34 @@ impl <'source> Tokenizer<'source> {
         panic!("get_number error")
     }
 
-    // pub fn get_operator(&mut self) -> Token<'source> {
-    //     let operator_pattern = Regex::new(r"^[+*/-]").unwrap();
-    //     if self.match_pattern(&operator_pattern) {
-    //         // get the matched string value
-    //         let text = &self.source[self.current..];
-    //         let matched_value = operator_pattern.find(text).unwrap();
-    //         let matched_value = &text[matched_value.start()..matched_value.end()];
-    //         self.current += matched_value.len();
-    //         return Token::new(TokenType::Operator, self.start, self.current, self.line, self.source);
-    //     }
-    //     panic!("get_operator error")
-    // }
-    // check if the string start with the given pattern
+    pub fn get_operator(&mut self) -> Token<'source> {
+        let two_char_operator = OPERATORS.keys().filter(|x| x.len() == 2).collect::<Vec<_>>();
+        let three_char_operator = OPERATORS.keys().filter(|x| x.len() == 3).collect::<Vec<_>>();
+        let single_char_operator = OPERATORS.keys().filter(|x| x.len() == 1).collect::<Vec<_>>();
+
+        let text = &self.source[self.current..];
+        for operator in three_char_operator {
+            if text.starts_with(operator) {
+                self.current += operator.len();
+                return Token::new(*OPERATORS.get(operator).unwrap(), self.start, self.current, self.line, self.source);
+            }
+        }
+        for operator in two_char_operator {
+            if text.starts_with(operator) {
+                self.current += operator.len();
+                return Token::new(*OPERATORS.get(operator).unwrap(), self.start, self.current, self.line, self.source);
+            }
+        }
+
+        for operator in single_char_operator {
+            if text.starts_with(operator) {
+                self.current += operator.len();
+                return Token::new(*OPERATORS.get(operator).unwrap(), self.start, self.current, self.line, self.source);
+            }
+        }
+
+        panic!("get_operator error")
+    }
     pub fn match_pattern(&mut self, pattern: &Regex) -> bool {
         let source = &self.source[self.current..];
         pattern.is_match(source)
@@ -320,5 +409,63 @@ mod tests {
         assert_eq!(token.token_type, TokenType::Def);
         let token = tokenizer.next();
         assert_eq!(token.token_type, TokenType::EndMarker);
+    }
+    #[test]
+    fn test_tokenizer_operator() {
+        let source = "name + - * /";
+        let mut tokenizer = Tokenizer::new(source);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Name);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Plus);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Minus);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Star);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Slash);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::EndMarker);
+    }
+    #[test]
+    fn test_tokenizer_newline() {
+        let source = "name + - * / \r \r \n \r \r 4 + 3";
+
+        let mut tokenizer = Tokenizer::new(source);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Name);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Plus);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Minus);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Star);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Slash);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Newline);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Number);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Plus);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::Number);
+        let token = tokenizer.next();
+        assert_eq!(token.token_type, TokenType::EndMarker);
+    }
+
+    #[test]
+    fn test_read_file() {
+        // read from file "test/fib.py"
+        let source = std::fs::read_to_string("tests/fib.py").unwrap();
+        let mut tokenizer = Tokenizer::new(&source);
+        let mut token = tokenizer.next();
+        loop {
+            if token.token_type == TokenType::EndMarker {
+                break;
+            }
+            println!("{:?}", token);
+            token = tokenizer.next();
+        }
     }
 }
